@@ -1,6 +1,5 @@
 from flask_openapi3 import OpenAPI, Info, Tag
-from flask import redirect, jsonify
-from sqlalchemy import func
+from flask import redirect
 from sqlalchemy.exc import IntegrityError
 import requests
 
@@ -12,7 +11,7 @@ from flask_cors import CORS
 
 SHORTEN_URL_ENDPOINT = 'https://gotiny.cc/api'
 
-info = Info(title="Login Service API", version="1.0.0")
+info = Info(title="Product Service API", version="1.0.0")
 app = OpenAPI(__name__, info=info)
 CORS(app)
 
