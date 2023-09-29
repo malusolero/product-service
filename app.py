@@ -32,7 +32,7 @@ def home():
     return redirect('/openapi')
 
 @app.post('/product', tags=[product_tag], responses={"200": GetProductResponseSchema, "409": ErrorSchema, "400": ErrorSchema})
-def create_product(form: CreateProductSchema):
+def create_product(body: CreateProductSchema):
     """
         Endpoint for creating a product inside database
     """
@@ -41,14 +41,14 @@ def create_product(form: CreateProductSchema):
         session = Session()
         
 
-        if not Product.validate_parameters(amount = form.amount, image = form.image, price = form.price):
+        if not Product.validate_parameters(amount = body.amount, image = body.image, price = body.price):
             error_message = "Pay attention to the required fields. Image must be a valid url, amount and price should have positive values"
             return { "message": error_message},"400"
         
-        shortened_image = shorten_url(form.image)
+        shortened_image = shorten_url(body.image)
         
 
-        product = Product(name=form.name, description=form.description, amount=form.amount, weight=form.weight, image=shortened_image, price=form.price)
+        product = Product(name=body.name, description=body.description, amount=body.amount, weight=body.weight, image=shortened_image, price=body.price)
         session.add(product)
         session.flush()
         session.refresh(product)
@@ -63,6 +63,57 @@ def create_product(form: CreateProductSchema):
         print(e)
         error_msg = "Error happened when trying to create a new product inside database :/"
         return {"mesage": error_msg}, 400
+
+@app.put('/product/<int:product_id>', tags=[product_tag], responses={"200": GetProductResponseSchema, "409": ErrorSchema, "400": ErrorSchema})
+def update_product(body: CreateProductSchema, path: ProductPathSchema ):
+    """
+        Endpoint for updating a product inside database
+    """
+
+    try:
+        session = Session()
+        
+
+        if not Product.validate_parameters(amount = body.amount, image = body.image, price = body.price):
+            error_message = "Pay attention to the required fields. Price must be positive float. Amount must be positive integer. Image must be a valid url."
+            return { "message": error_message},"400"
+
+        updated = session.query(Product).filter(Product.id == path.product_id).update({"name":body.name, "description":body.description, "amount":body.amount, "weight":body.weight, "image":body.image, "price":body.price })
+        session.commit()
+        updated_product = session.query(Product).filter(Product.id == path.product_id).first()
+        
+        if updated:
+            return return_product(updated_product), 200
+        else:
+            error_msg = 'Product not found in database'
+            return {"message": error_msg}, 404
+    
+
+    except IntegrityError as e:
+        print(e)
+        error_msg = "Peoduct with received name already exists :/"
+        return {"mesage": error_msg}, 409
+
+    except Exception as e:
+        print(e)
+        error_msg = "Error happened when trying to update a product inside database :/"
+        return {"mesage": error_msg}, 400
+
+@app.delete('/product/<int:product_id>', tags=[product_tag], responses={"200": {}, "404": ErrorSchema})
+def delete_item(path: ProductPathSchema):
+    """ Delete the product for given product name
+    """
+
+    session = Session()
+    updated = session.query(Product).filter(Product.id == path.product_id).delete()
+    session.commit()
+
+
+    if updated:
+        return {}, 200
+    else:
+        error_msg = 'Product not found in database'
+        return {"message": error_msg}, 404
 
 @app.get('/product/<int:product_id>', tags=[product_tag], responses={"200": GetProductResponseSchema, 400: ErrorSchema, 404: ErrorSchema})
 def get_product(path: ProductPathSchema):
@@ -106,65 +157,14 @@ def get_products():
         error_message= 'Something went wrong'
         return { "message": error_message }
 
-@app.put('/product/<int:product_id>', tags=[product_tag], responses={"200": GetProductResponseSchema, "409": ErrorSchema, "400": ErrorSchema})
-def update_product(form: CreateProductSchema, path: ProductPathSchema ):
-    """
-        Endpoint for updating a product inside database
-    """
-
-    try:
-        session = Session()
-        
-
-        if not Product.validate_parameters(amount = form.amount, image = form.image, price = form.price):
-            error_message = "Pay attention to the required fields. Price must be positive float. Amount must be positive integer. Image must be a valid url."
-            return { "message": error_message},"400"
-
-        updated = session.query(Product).filter(Product.id == path.product_id).update({"name":form.name, "description":form.description, "amount":form.amount, "weight":form.weight, "image":form.image, "price":form.price })
-        session.commit()
-        updated_product = session.query(Product).filter(Product.id == path.product_id).first()
-        
-        if updated:
-            return return_product(updated_product), 200
-        else:
-            error_msg = 'Product not found in database'
-            return {"message": error_msg}, 404
-    
-
-    except IntegrityError as e:
-        print(e)
-        error_msg = "Peoduct with received name already exists :/"
-        return {"mesage": error_msg}, 409
-
-    except Exception as e:
-        print(e)
-        error_msg = "Error happened when trying to update a product inside database :/"
-        return {"mesage": error_msg}, 400
-
-@app.delete('/product/<int:product_id>', tags=[product_tag], responses={"200": {}, "404": ErrorSchema})
-def delete_item(path: ProductPathSchema):
-    """ Delete the product for given product name
-    """
-
-    session = Session()
-    updated = session.query(Product).filter(Product.id == path.product_id).delete()
-    session.commit()
-
-
-    if updated:
-        return {}, 200
-    else:
-        error_msg = 'Product not found in database'
-        return {"message": error_msg}, 404
-
 @app.get('/product/search', tags=[product_tag], responses={"200": ListProductsSchema, "400": ErrorSchema})
 def search_product(query: ProductSearchSchema):
-    name = query.name
-
-    if not name:
-        return { "products": []}
     
     try:
+        if not query or not query.name:
+            return { "products": []}
+
+        name = query.name
         session = Session()
         products = session.query(Product).filter(Product.name.ilike(f'%{name}%')).all()
         
@@ -181,8 +181,6 @@ def create_order(body: CreateOrderSchema):
     if not Order.validate_parameters(email = body.user_email, total_price=body.total_price):
         error_message = 'Please provide a valid aroguments!'
         return { "message": error_message}, 400
-
-        
 
     try:
 
